@@ -26,3 +26,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/check.sh)
 bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/system.sh)
 ```
 
+### ⚡ 解除系统限制（ulimit / 配额 / 防火墙 / SELinux 等）
+交互式选择**永久生效或临时生效**解除限制脚本，并在执行前自动备份相关配置文件。
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/unlimit.sh)
+```
