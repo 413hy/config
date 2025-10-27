@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-REPO_BASE="https://raw.githubusercontent.com/413hy/netconfig/main"  # 你的GitHub仓库路径
+REPO_BASE="https://raw.githubusercontent.com/413hy/config/main"  # 你的GitHub仓库路径
 LOG_FILE="/tmp/system_toolkit_$(date +%F_%H-%M-%S).log"
 
 # 输出美观的颜色函数
@@ -30,7 +30,7 @@ show_menu(){
   echo "      🧰 通用系统管理工具 (System Toolkit)"
   echo "============================================"
   echo " 1) 配置网卡（静态IP/DHCP）"
-  echo " 2) 查看系统信息"
+  echo " 2) 查看网卡信息"
   echo " 3) 解除系统限制（ulimit/sysctl等）"
   echo " 4) 清理系统数据（安全版）"
   echo " 5) 检查系统状态"
@@ -57,16 +57,16 @@ while true; do
       run_remote_script "netconfig.sh"     # 配置网卡脚本
       ;;
     2)
-      run_remote_script "sysinfo.sh"       # 查看系统信息脚本
+      run_remote_script "system.sh"       # 查看系统信息脚本
       ;;
     3)
       run_remote_script "ulimit.sh"        # 解除系统限制脚本
       ;;
     4)
-      run_remote_script "clean-system-safe.sh" # 安全清理脚本
+      run_remote_script "clean.sh" # 安全清理脚本
       ;;
     5)
-      run_remote_script "status-check.sh"  # 系统状态检查脚本
+      run_remote_script "status-c.sh"  # 系统状态检查脚本
       ;;
     6)
       echo
