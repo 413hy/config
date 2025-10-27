@@ -8,6 +8,13 @@
 
 无需克隆仓库，直接复制以下命令即可运行：
 
+## 🧹 一键脚本集合
+支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/tools.sh)
+```
+
+
 ### 🛠️ 配置网卡脚本
 交互式配置网卡（支持自动识别系统类型、静态/DHCP 切换、自动重启网络）  
 ```bash
