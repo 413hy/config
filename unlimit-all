@@ -136,12 +136,12 @@ if [ -f "$FSTAB" ]; then
   info "已尝试从 $FSTAB 中移除 usrquota/grpquota 标记（备份已创建）"
 fi
 # 删除配额文件（如果存在）
-for qf in /aquota.* /quota.* /usrquota.* 2>/dev/null; do
-  if [ -e "$qf" ]; then
-    backup_file "$qf"
-    rm -f "$qf" || true
-    info "已删除配额文件 $qf（备份已创建）"
-  fi
+for qf in /aquota.* /quota.* /usrquota.*; do
+  # 忽略找不到匹配的文件的错误
+  [ -e "$qf" ] || continue
+  backup_file "$qf"
+  rm -f "$qf" 2>/dev/null || true
+  info "已删除配额文件 $qf（备份已创建）"
 done
 
 # -----------------------
