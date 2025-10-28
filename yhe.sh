@@ -3,7 +3,7 @@
 # 🧰 system-toolkit.sh
 # 通用系统管理工具 - 多功能交互版（全发行版兼容）
 # Author: yuuhe
-# Version: 1.3
+# Version: 1.4
 # ------------------------------------------
 
 set -euo pipefail
@@ -13,7 +13,7 @@ set -euo pipefail
 # ------------------------------------------
 REPO_BASE="https://raw.githubusercontent.com/413hy/config/main"
 LOG_FILE="/tmp/system_toolkit_$(date +%F_%H-%M-%S).log"
-VERSION="1.3"
+VERSION="1.4"
 YHE_PATH="/usr/local/bin/yhe"
 SCRIPT_PATH="$(realpath "$0")"
 
@@ -26,7 +26,7 @@ yellow() { echo -e "\033[1;33m$*\033[0m"; }
 red()    { echo -e "\033[1;31m$*\033[0m"; }
 
 # ------------------------------------------
-# 🔹 环境检测与依赖安装（多发行版兼容）
+# 🔹 环境检测与依赖安装
 # ------------------------------------------
 check_env() {
   [[ $EUID -ne 0 ]] && { red "请以 root 身份运行"; exit 1; }
@@ -44,34 +44,47 @@ check_env() {
     elif command -v apk &>/dev/null; then
       apk add --no-cache curl
     else
-      red "无法自动安装 curl，请手动安装后重试。"
+      red "❌ 无法自动安装 curl，请手动安装后重试。"
       exit 1
     fi
   fi
 }
 
 # ------------------------------------------
-# 🔹 自动注册快捷命令 yhe
+# 🔹 自动注册快捷命令 yhe（防悬空优化）
 # ------------------------------------------
 register_command() {
-  # 检查旧的坏符号链接
-  if [[ -L "$YHE_PATH" && ! -e "$YHE_PATH" ]]; then
-    yellow "检测到无效的 yhe 链接，正在修复..."
+  echo
+  yellow "🔧 正在检查 yhe 快捷命令状态..."
+
+  # 删除无效或旧的符号链接
+  if [[ -L "$YHE_PATH" && ! -e "$(readlink -f "$YHE_PATH")" ]]; then
+    yellow "检测到悬空符号链接，正在清理..."
     rm -f "$YHE_PATH"
   fi
 
-  if [[ ! -f "$YHE_PATH" ]]; then
-    echo
-    yellow "🔧 正在注册快捷命令 yhe..."
-    ln -sf "$SCRIPT_PATH" "$YHE_PATH"
-    chmod +x "$YHE_PATH"
-    green "✅ 已创建快捷命令：yhe"
-    green "现在可以立即输入 'yhe' 使用！"
-    echo
-
-    # 确保新环境立刻识别 yhe 命令
-    hash -r 2>/dev/null || true
+  # 删除同名非符号文件
+  if [[ -f "$YHE_PATH" && ! -L "$YHE_PATH" ]]; then
+    yellow "检测到同名文件 /usr/local/bin/yhe，正在移除..."
+    rm -f "$YHE_PATH"
   fi
+
+  # 重新创建符号链接
+  if [[ ! -e "$YHE_PATH" ]]; then
+    ln -sf "$SCRIPT_PATH" "$YHE_PATH"
+    if [[ -e "$(readlink -f "$YHE_PATH")" ]]; then
+      chmod +x "$(readlink -f "$YHE_PATH")" 2>/dev/null || true
+      green "✅ 已成功注册快捷命令：yhe"
+      green "现在可以直接输入 'yhe' 来启动系统工具包"
+    else
+      red "⚠️ 快捷命令链接创建失败，可能路径无效：$SCRIPT_PATH"
+    fi
+  else
+    green "✅ 快捷命令 yhe 已存在，可直接使用"
+  fi
+
+  hash -r 2>/dev/null || true
+  echo
 }
 
 
