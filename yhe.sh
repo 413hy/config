@@ -6,6 +6,23 @@
 # Version: 1.2
 # ------------------------------------------
 
+# ==========================================
+# 自动创建快捷命令 yhe（仅首次执行时触发）
+# ==========================================
+YHE_PATH="/usr/local/bin/yhe"
+SCRIPT_PATH="$(realpath "$0")"
+
+if [[ ! -f "$YHE_PATH" ]]; then
+  echo
+  yellow "🔧 检测到尚未创建快捷命令 yhe，正在自动注册..."
+  ln -sf "$SCRIPT_PATH" "$YHE_PATH"
+  chmod +x "$YHE_PATH"
+  green "✅ 已创建快捷命令：yhe"
+  green "现在你可以直接输入 'yhe' 来启动系统工具包！"
+  echo
+fi
+
+
 set -euo pipefail
 
 REPO_BASE="https://raw.githubusercontent.com/413hy/config/main"
