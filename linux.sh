@@ -33,8 +33,9 @@ show_menu(){
   echo " 2) 查看网卡信息"
   echo " 3) 解除系统限制（ulimit/sysctl等）"
   echo " 4) 清理系统数据（安全版）"
-  echo " 5) 检查系统状态"
-  echo " 6) 更新本脚本"
+  echo " 5) 检查系统信息"
+  echo " 6) 生成快照"
+  echo " 7) 更新本脚本"
   echo " 0) 退出"
   echo "============================================"
 }
@@ -57,18 +58,21 @@ while true; do
       run_remote_script "netconfig.sh"     # 配置网卡脚本
       ;;
     2)
-      run_remote_script "system.sh"       # 查看系统信息脚本
+      run_remote_script "check.sh"     # 配置网卡脚本
       ;;
     3)
-      run_remote_script "ulimit.sh"        # 解除系统限制脚本
+      run_remote_script "system.sh"       # 查看系统信息脚本
       ;;
     4)
-      run_remote_script "clean.sh" # 安全清理脚本
+      run_remote_script "ulimit.sh"        # 解除系统限制脚本
       ;;
     5)
-      run_remote_script "status-c.sh"  # 系统状态检查脚本
+      run_remote_script "clean.sh" # 安全清理脚本
       ;;
     6)
+      run_remote_script "timeshift.sh"  # 系统状态检查脚本
+      ;;
+    7)
       echo
       blue "正在更新主控脚本自身..."
       curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$0"
