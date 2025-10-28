@@ -15,7 +15,7 @@ REPO_BASE="https://raw.githubusercontent.com/413hy/config/main"
 LOG_FILE="/tmp/system_toolkit_$(date +%F_%H-%M-%S).log"
 VERSION="1.4"
 YHE_PATH="/usr/local/bin/yhe"
-SCRIPT_PATH="$(realpath "$0")"
+INSTALL_PATH="/usr/local/bin/system-toolkit.sh"
 
 # ------------------------------------------
 # 🔹 颜色输出函数
@@ -44,49 +44,48 @@ check_env() {
     elif command -v apk &>/dev/null; then
       apk add --no-cache curl
     else
-      red "❌ 无法自动安装 curl，请手动安装后重试。"
+      red "无法自动安装 curl，请手动安装后重试。"
       exit 1
     fi
   fi
 }
 
 # ------------------------------------------
-# 🔹 自动注册快捷命令 yhe（防悬空优化）
+# 🔹 安装脚本到本地（解决 <(curl) 路径问题）
 # ------------------------------------------
-register_command() {
-  echo
-  yellow "🔧 正在检查 yhe 快捷命令状态..."
+ensure_installed() {
+  local current_path
+  current_path="$(realpath "$0" 2>/dev/null || true)"
 
-  # 删除无效或旧的符号链接
-  if [[ -L "$YHE_PATH" && ! -e "$(readlink -f "$YHE_PATH")" ]]; then
-    yellow "检测到悬空符号链接，正在清理..."
-    rm -f "$YHE_PATH"
-  fi
-
-  # 删除同名非符号文件
-  if [[ -f "$YHE_PATH" && ! -L "$YHE_PATH" ]]; then
-    yellow "检测到同名文件 /usr/local/bin/yhe，正在移除..."
-    rm -f "$YHE_PATH"
-  fi
-
-  # 重新创建符号链接
-  if [[ ! -e "$YHE_PATH" ]]; then
-    ln -sf "$SCRIPT_PATH" "$YHE_PATH"
-    if [[ -e "$(readlink -f "$YHE_PATH")" ]]; then
-      chmod +x "$(readlink -f "$YHE_PATH")" 2>/dev/null || true
-      green "✅ 已成功注册快捷命令：yhe"
-      green "现在可以直接输入 'yhe' 来启动系统工具包"
-    else
-      red "⚠️ 快捷命令链接创建失败，可能路径无效：$SCRIPT_PATH"
-    fi
+  # 如果当前脚本在内存管道中（即通过 bash <(curl ...) 启动）
+  if [[ "$current_path" == /proc/*/fd/* ]]; then
+    yellow "检测到脚本是通过 <(curl) 方式运行，正在写入本地副本..."
+    curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$INSTALL_PATH"
+    chmod +x "$INSTALL_PATH"
+    green "✅ 脚本已安装到: $INSTALL_PATH"
+    SCRIPT_PATH="$INSTALL_PATH"
   else
-    green "✅ 快捷命令 yhe 已存在，可直接使用"
+    SCRIPT_PATH="$current_path"
   fi
-
-  hash -r 2>/dev/null || true
-  echo
 }
 
+# ------------------------------------------
+# 🔹 注册快捷命令
+# ------------------------------------------
+register_command() {
+  # 如果旧链接无效则删除
+  if [[ -L "$YHE_PATH" && ! -e "$YHE_PATH" ]]; then
+    rm -f "$YHE_PATH"
+  fi
+
+  if [[ ! -f "$YHE_PATH" ]]; then
+    ln -sf "$SCRIPT_PATH" "$YHE_PATH"
+    chmod +x "$YHE_PATH"
+    green "✅ 已创建快捷命令：yhe"
+    green "现在可立即使用：yhe"
+    hash -r 2>/dev/null || true
+  fi
+}
 
 # ------------------------------------------
 # 🔹 检查更新
@@ -98,7 +97,8 @@ check_update() {
     yellow "检测到新版本: $remote_version（当前版本: $VERSION）"
     read -rp "是否更新到最新版本？(y/N): " upd
     if [[ $upd =~ ^[Yy]$ ]]; then
-      curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$0"
+      curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$SCRIPT_PATH"
+      chmod +x "$SCRIPT_PATH"
       green "✅ 已更新到最新版本，请重新运行 'yhe' 命令。"
       exit 0
     fi
@@ -106,7 +106,7 @@ check_update() {
 }
 
 # ------------------------------------------
-# 🔹 执行远程脚本
+# 🔹 执行远程子脚本
 # ------------------------------------------
 run_remote_script() {
   local script_name="$1"
@@ -140,9 +140,10 @@ show_menu() {
 }
 
 # ------------------------------------------
-# 🔹 主执行逻辑
+# 🔹 主逻辑
 # ------------------------------------------
 check_env
+ensure_installed
 register_command
 check_update
 
@@ -158,7 +159,8 @@ while true; do
     6) run_remote_script "timeshift.sh" ;;
     7)
       blue "正在更新主控脚本..."
-      curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$0"
+      curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$SCRIPT_PATH"
+      chmod +x "$SCRIPT_PATH"
       green "✅ 更新完成，请重新运行。"
       exit 0
       ;;
