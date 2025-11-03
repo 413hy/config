@@ -1,178 +1,195 @@
 #!/usr/bin/env bash
 #
-# 🧰 system-toolkit.sh
-# 通用系统管理工具 - 多功能交互版（全发行版兼容）
-# Author: yuuhe
-# Version: 1.4
+# 🧰 system-toolkit.sh v1.5.1
+# 修復 unbound variable + 更穩健參數處理
 # ------------------------------------------
 
 set -euo pipefail
 
 # ------------------------------------------
-# 🔹 基础定义
+# 🔹 基礎定義
 # ------------------------------------------
 REPO_BASE="https://raw.githubusercontent.com/413hy/config/main"
-LOG_FILE="/tmp/system_toolkit_$(date +%F_%H-%M-%S).log"
-VERSION="1.4"
+VERSION="1.5.1"
+SCRIPT_NAME="system-toolkit.sh"
+INSTALL_PATH="/usr/local/bin/system-toolkit"
 YHE_PATH="/usr/local/bin/yhe"
-INSTALL_PATH="/usr/local/bin/system-toolkit.sh"
+
+# 日誌
+TMP_LOG=$(mktemp "/tmp/system_toolkit.XXXXXX.log")
+exec > >(tee -a "$TMP_LOG") 2>&1
 
 # ------------------------------------------
-# 🔹 颜色输出函数
+# 🔹 顏色
 # ------------------------------------------
-blue()   { echo -e "\033[1;34m$*\033[0m"; }
-green()  { echo -e "\033[1;32m$*\033[0m"; }
-yellow() { echo -e "\033[1;33m$*\033[0m"; }
-red()    { echo -e "\033[1;31m$*\033[0m"; }
+blue()   { printf "\033[1;34m%s\033[0m\n" "$*"; }
+green()  { printf "\033[1;32m%s\033[0m\n" "$*"; }
+yellow() { printf "\033[1;33m%s\033[0m\n" "$*"; }
+red()    { printf "\033[1;31m%s\033[0m\n" "$*"; }
 
 # ------------------------------------------
-# 🔹 环境检测与依赖安装
+# 🔹 工具函數
 # ------------------------------------------
-check_env() {
-  [[ $EUID -ne 0 ]] && { red "请以 root 身份运行"; exit 1; }
+die() { red "❌ $1"; exit 1; }
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$TMP_LOG"; }
 
-  if ! command -v curl &>/dev/null; then
-    yellow "curl 未安装，正在尝试自动安装..."
-    if command -v apt &>/dev/null; then
-      apt update -y && apt install -y curl
-    elif command -v dnf &>/dev/null; then
-      dnf install -y curl
-    elif command -v yum &>/dev/null; then
-      yum install -y curl
-    elif command -v pacman &>/dev/null; then
-      pacman -Sy --noconfirm curl
-    elif command -v apk &>/dev/null; then
-      apk add --no-cache curl
-    else
-      red "无法自动安装 curl，请手动安装后重试。"
-      exit 1
-    fi
-  fi
+download() {
+  local url="$1" dest="$2"
+  curl -fsSL --connect-timeout 10 "$url" -o "$dest" || die "下載失敗: $url"
 }
 
-# ------------------------------------------
-# 🔹 安装脚本到本地（解决 <(curl) 路径问题）
-# ------------------------------------------
-ensure_installed() {
-  local current_path
-  current_path="$(realpath "$0" 2>/dev/null || true)"
+check_root() {
+  [[ $EUID -eq 0 ]] || die "請以 root 身份運行"
+}
 
-  # 如果当前脚本在内存管道中（即通过 bash <(curl ...) 启动）
-  if [[ "$current_path" == /proc/*/fd/* ]]; then
-    yellow "检测到脚本是通过 <(curl) 方式运行，正在写入本地副本..."
-    curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$INSTALL_PATH"
-    chmod +x "$INSTALL_PATH"
-    green "✅ 脚本已安装到: $INSTALL_PATH"
-    SCRIPT_PATH="$INSTALL_PATH"
+ensure_curl() {
+  command -v curl &>/dev/null && return 0
+  yellow "curl 未安裝，正在自動安裝..."
+  if command -v apt &>/dev/null; then
+    apt update -y && apt install -y curl
+  elif command -v dnf &>/dev/null; then
+    dnf install -y curl
+  elif command -v yum &>/dev/null; then
+    yum install -y curl
+  elif command -v pacman &>/dev/null; then
+    pacman -Sy --noconfirm curl
+  elif command -v apk &>/dev/null; then
+    apk add --no-cache curl
   else
-    SCRIPT_PATH="$current_path"
+    die "無法自動安裝 curl"
   fi
 }
 
-# ------------------------------------------
-# 🔹 注册快捷命令
-# ------------------------------------------
-register_command() {
-  # 如果旧链接无效则删除
-  if [[ -L "$YHE_PATH" && ! -e "$YHE_PATH" ]]; then
-    rm -f "$YHE_PATH"
-  fi
-
-  if [[ ! -f "$YHE_PATH" ]]; then
-    ln -sf "$SCRIPT_PATH" "$YHE_PATH"
-    chmod +x "$YHE_PATH"
-    green "✅ 已创建快捷命令：yhe"
-    green "现在可立即使用：yhe"
-    hash -r 2>/dev/null || true
-  fi
+get_script_path() {
+  local path="${BASH_SOURCE[0]}"
+  [[ "$path" == "/dev/fd/"* || "$path" == "/proc/"* ]] && echo "TEMP" && return
+  realpath "$path" 2>/dev/null || readlink -f "$path" 2>/dev/null || echo "$path"
 }
 
-# ------------------------------------------
-# 🔹 检查更新
-# ------------------------------------------
+install_self() {
+  local temp=$(mktemp)
+  download "$REPO_BASE/$SCRIPT_NAME" "$temp" || die "無法下載主腳本"
+  install -m 755 "$temp" "$INSTALL_PATH"
+  rm -f "$temp"
+  green "腳本已更新至: $INSTALL_PATH"
+}
+
 check_update() {
-  local remote_version
-  remote_version=$(curl -fsSL "$REPO_BASE/VERSION" 2>/dev/null || echo "unknown")
-  if [[ "$remote_version" != "unknown" && "$remote_version" != "$VERSION" ]]; then
-    yellow "检测到新版本: $remote_version（当前版本: $VERSION）"
-    read -rp "是否更新到最新版本？(y/N): " upd
-    if [[ $upd =~ ^[Yy]$ ]]; then
-      curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$SCRIPT_PATH"
-      chmod +x "$SCRIPT_PATH"
-      green "✅ 已更新到最新版本，请重新运行 'yhe' 命令。"
-      exit 0
-    fi
-  fi
+  local remote_ver
+  remote_ver=$(curl -fsSL --connect-timeout 5 "$REPO_BASE/VERSION" 2>/dev/null || echo "unknown")
+  [[ "$remote_ver" == "$VERSION" || "$remote_ver" == "unknown" ]] && return 0
+
+  yellow "檢測到新版本: $remote_ver（當前: $VERSION）"
+  read -rp "是否更新？(y/N): " ans
+  [[ "$ans" =~ ^[Yy]$ ]] || return 0
+
+  blue "正在更新..."
+  install_self
+  register_command
+  green "更新成功！重啟中..."
+  mv "$TMP_LOG" "/var/log/system-toolkit_$(date +%F_%H%M%S).log" 2>/dev/null || true
+  exec "$INSTALL_PATH" "$@"
 }
 
-# ------------------------------------------
-# 🔹 执行远程子脚本
-# ------------------------------------------
+register_command() {
+  [[ -L "$YHE_PATH" && ! -e "$YHE_PATH" ]] && rm -f "$YHE_PATH"
+  [[ -e "$YHE_PATH" ]] && return 0
+  ln -sf "$INSTALL_PATH" "$YHE_PATH"
+  green "快捷指令已創建: yhe"
+  hash -r 2>/dev/null || true
+}
+
+# 關鍵修復：嚴格檢查參數
 run_remote_script() {
-  local script_name="$1"
-  local script_url="$REPO_BASE/$script_name"
+  # 必須傳入參數
+  [[ -z "${1:-}" ]] && { red "內部錯誤：run_remote_script 缺少參數"; return 1; }
+  local name="$1"
+  local url="$REPO_BASE/$name"
+  local temp_script
 
-  blue "🌐 正在加载脚本：$script_url"
-  if curl -fsSL "$script_url" >/dev/null 2>&1; then
-    bash <(curl -fsSL "$script_url") | tee -a "$LOG_FILE"
+  temp_script=$(mktemp) || die "無法創建臨時文件"
+  blue "正在加載子腳本: $name"
+
+  if download "$url" "$temp_script"; then
+    bash "$temp_script" 2>&1 | tee -a "$TMP_LOG"
+    rm -f "$temp_script"
   else
-    red "❌ 无法加载脚本：$script_url"
+    red "下載失敗: $name"
+    rm -f "$temp_script"
+    return 1
   fi
 }
 
-# ------------------------------------------
-# 🔹 主菜单
-# ------------------------------------------
 show_menu() {
   clear
-  echo "============================================"
-  echo "      🧰 通用系统管理工具 (System Toolkit)"
-  echo "============================================"
-  echo " 1) 配置网卡（静态IP/DHCP）"
-  echo " 2) 查看网卡信息"
-  echo " 3) 解除系统限制（ulimit/sysctl等）"
-  echo " 4) 清理系统数据（安全版）"
-  echo " 5) 查看系统信息"
-  echo " 6) 管理系统快照"
-  echo " 7) 检查并更新脚本"
-  echo " 0) 退出"
-  echo "============================================"
+  cat << EOF
+============================================
+      通用系統管理工具 v$VERSION
+============================================
+ 1) 配置網卡（靜態IP/DHCP）
+ 2) 查看網卡信息
+ 3) 解除系統限制（ulimit/sysctl）
+ 4) 清理系統數據（安全版）
+ 5) 查看系統信息
+ 6) 管理系统快照
+ 7) 強制更新腳本
+ 0) 退出
+============================================
+EOF
 }
 
 # ------------------------------------------
-# 🔹 主逻辑
+# 🔹 主邏輯
 # ------------------------------------------
-check_env
-ensure_installed
-register_command
-check_update
+main() {
+  check_root
+  ensure_curl
 
-while true; do
-  show_menu
-  read -rp "请输入操作编号 [0-7]: " choice
-  case "$choice" in
-    1) run_remote_script "netconfig.sh" ;;
-    2) run_remote_script "check.sh" ;;
-    3) run_remote_script "unlimit.sh" ;;
-    4) run_remote_script "clean.sh" ;;
-    5) run_remote_script "system.sh" ;;
-    6) run_remote_script "timeshift.sh" ;;
-    7)
-      blue "正在更新主控脚本..."
-      curl -fsSL "$REPO_BASE/system-toolkit.sh" -o "$SCRIPT_PATH"
-      chmod +x "$SCRIPT_PATH"
-      green "✅ 更新完成，请重新运行。"
-      exit 0
-      ;;
-    0)
-      echo "👋 再见！"
-      exit 0
-      ;;
-    *)
-      red "无效选项，请重新输入。"
-      ;;
-  esac
-  echo
-  yellow "操作已完成，按回车返回主菜单..."
-  read -r
-done
+  local current_path
+  current_path=$(get_script_path)
+
+  # 臨時運行 → 安裝本地
+  if [[ "$current_path" == "TEMP" ]]; then
+    yellow "檢測到臨時運行，正在安裝..."
+    install_self
+    register_command
+    green "安裝完成！請使用 'yhe' 命令"
+    mv "$TMP_LOG" "/var/log/system-toolkit_install_$(date +%F_%H%M%S).log" 2>/dev/null || true
+    exec "$INSTALL_PATH" "$@"
+  fi
+
+  check_update
+  register_command
+
+  while true; do
+    show_menu
+    read -rp "請輸入選項 [0-7]: " choice
+    case "$choice" in
+      1) run_remote_script "netconfig.sh" ;;
+      2) run_remote_script "check.sh" ;;
+      3) run_remote_script "unlimit.sh" ;;
+      4) run_remote_script "clean.sh" ;;
+      5) run_remote_script "system.sh" ;;
+      6) run_remote_script "timeshift.sh" ;;
+      7)
+        blue "正在強制更新..."
+        install_self
+        green "更新完成，請重新運行 yhe"
+        exit 0
+        ;;
+      0)
+        green "再見！"
+        exit 0
+        ;;
+      *)
+        red "無效選項，請重新輸入。"
+        sleep 1
+        ;;
+    esac
+    yellow "按回車鍵繼續..."
+    read -r
+  done
+}
+
+# 啟動
+main "$@"
