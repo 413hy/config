@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 🧰 system-toolkit.sh v1.5.1
+# 🧰 yhe.sh v1.5.1
 # 修復 unbound variable + 更穩健參數處理
 # ------------------------------------------
 
@@ -16,7 +16,7 @@ INSTALL_PATH="/usr/local/bin/system-toolkit"
 YHE_PATH="/usr/local/bin/yhe"
 
 # 日誌
-TMP_LOG=$(mktemp "/tmp/system_toolkit.XXXXXX.log")
+TMP_LOG=$(mktemp "/tmp/yhe.XXXXXX.log")
 exec > >(tee -a "$TMP_LOG") 2>&1
 
 # ------------------------------------------
