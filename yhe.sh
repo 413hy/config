@@ -11,7 +11,7 @@ set -euo pipefail
 # ------------------------------------------
 REPO_BASE="https://raw.githubusercontent.com/413hy/config/main"
 VERSION="1.5.1"
-SCRIPT_NAME="system-toolkit.sh"
+SCRIPT_NAME="yhe.sh"
 INSTALL_PATH="/usr/local/bin/system-toolkit"
 YHE_PATH="/usr/local/bin/yhe"
 
