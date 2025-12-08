@@ -12,7 +12,7 @@
 ## 🧹 一键脚本集合
 支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/mirrorrs.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/yhe.sh)
 ```
 
 #### 🛠️ 配置网卡脚本
