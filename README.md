@@ -59,7 +59,7 @@ chmod 777 mirrors.sh
 ./mirrors.sh
 ```
 
-## 🧹 换源最优脚本 mirrors_speed.sh
+## 🧹 换源最优脚本（官方） netselect-apt
 支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
 ```bash
 apt install netselect-apt -y
