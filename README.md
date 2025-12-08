@@ -13,7 +13,7 @@
 ```bash
 wget -O mirrors.sh https://raw.githubusercontent.com/413hy/config/main/mirrors.sh
 chmod 777 mirrors.sh
-sudo ./mirrors.sh
+./mirrors.sh
 ```
 
 ## 🧹 一键脚本集合
