@@ -1,7 +1,7 @@
 #!/bin/bash
 echo "========================================"
 echo "  Linux 最快镜像源自动选择脚本"
-echo "  作者: yhe"
+echo "  作者: 酷安@浅笑科技"
 echo "  支持国内外VPS自动选择最优镜像"
 echo "========================================"
 echo ""
@@ -220,14 +220,20 @@ test_mirror_speed() {
     # 测试延迟和下载速度
     local ping_time=$(curl -o /dev/null -s -w '%{time_total}' --connect-timeout 3 --max-time 5 "$test_file" 2>/dev/null)
     
-    if [ -n "$ping_time" ] && [ "$ping_time" != "0.000" ]; then
+    if [ -n "$ping_time" ] && [ "$ping_time" != "0.000" ] && [ "$ping_time" != "" ]; then
         # 再测试实际下载速度
         local speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 8 "$test_file" 2>/dev/null)
         
-        if [ -n "$speed" ] && [ "$speed" != "0.000" ]; then
+        if [ -n "$speed" ] && [ "$speed" != "0.000" ] && [ "$speed" != "" ]; then
             local speed_kb=$(echo "scale=2; $speed / 1024" | bc 2>/dev/null)
             local ping_ms=$(echo "scale=0; $ping_time * 1000" | bc 2>/dev/null)
-            echo "$speed_kb|$ping_ms"
+            
+            # 确保返回值不为空
+            if [ -n "$speed_kb" ] && [ -n "$ping_ms" ] && [ "$speed_kb" != "" ] && [ "$ping_ms" != "" ]; then
+                echo "$speed_kb|$ping_ms"
+            else
+                echo "0|999999"
+            fi
         else
             echo "0|999999"
         fi
@@ -271,7 +277,7 @@ for name in "${!MIRROR_LIST[@]}"; do
     SPEED_RESULTS[$name]=$speed
     PING_RESULTS[$name]=$ping
     
-    if [ "$speed" != "0" ]; then
+    if [ -n "$speed" ] && [ -n "$ping" ] && [ "$speed" != "0" ] && [ "$speed" != "" ]; then
         printf "%-15.2f %-15s\n" "$speed" "${ping}ms"
         
         # 综合评分：速度权重70%，延迟权重30%
@@ -279,12 +285,15 @@ for name in "${!MIRROR_LIST[@]}"; do
         score=$(echo "scale=2; $speed - ($ping / 10)" | bc -l 2>/dev/null)
         best_score=$(echo "scale=2; $fastest_speed - ($lowest_ping / 10)" | bc -l 2>/dev/null)
         
-        is_better=$(echo "$score > $best_score" | bc -l 2>/dev/null)
-        if [ "$is_better" -eq 1 ] || [ "$fastest_speed" = "0" ]; then
-            fastest_speed=$speed
-            fastest_mirror=$url
-            fastest_name=$name
-            lowest_ping=$ping
+        # 安全的数值比较
+        if [ -n "$score" ] && [ -n "$best_score" ]; then
+            is_better=$(echo "$score > $best_score" | bc -l 2>/dev/null)
+            if [ "$is_better" = "1" ] || [ "$fastest_speed" = "0" ]; then
+                fastest_speed=$speed
+                fastest_mirror=$url
+                fastest_name=$name
+                lowest_ping=$ping
+            fi
         fi
     else
         printf "%-15s %-15s\n" "超时" "失败"
@@ -312,9 +321,11 @@ echo "----------------------------------------"
 for name in "${!SPEED_RESULTS[@]}"; do
     speed="${SPEED_RESULTS[$name]}"
     ping="${PING_RESULTS[$name]}"
-    if [ "$speed" != "0" ]; then
+    if [ -n "$speed" ] && [ -n "$ping" ] && [ "$speed" != "0" ] && [ "$speed" != "" ] && [ "$ping" != "" ]; then
         score=$(echo "scale=2; $speed - ($ping / 10)" | bc -l 2>/dev/null)
-        echo "$score|$name|$speed|$ping"
+        if [ -n "$score" ] && [ "$score" != "" ]; then
+            echo "$score|$name|$speed|$ping"
+        fi
     fi
 done | sort -rn | head -5 | awk -F'|' '{printf "%d. %-25s %8.2f KB/s  %5sms\n", NR, $2, $3, $4}'
 echo ""
