@@ -1,88 +1,230 @@
-
-你说：
 #!/usr/bin/env bash
 # ==========================================
-# 通用 Linux 静态网卡配置脚本（适配主流发行版）
-# 支持: Debian/Ubuntu/Arch/Manjaro/CentOS/RHEL/Rocky/Fedora/openSUSE/Alpine/NixOS
-# 作者: ChatGPT（GPT-5）
+# 通用 Linux 静态网卡配置脚本（优化版）
+# 支持: Debian/Ubuntu/Arch/Manjaro/CentOS/RHEL/Rocky/Fedora/openSUSE
 # ==========================================
 
+set -euo pipefail  # 严格模式：遇到错误立即退出
+
 echo "=========================================="
-echo "🌐 通用 Linux 网卡配置工具"
+echo "🌐 通用 Linux 网卡配置工具 (优化版)"
 echo "=========================================="
 echo
 
-# 检测网卡
-interfaces=$(ip -o link show | awk -F': ' '{print $2}' | grep -v "lo")
-echo "检测到以下网卡："
-echo "$interfaces"
-echo
-read -p "请输入要配置的网卡名称: " IFACE
-
-if ! ip link show "$IFACE" >/dev/null 2>&1; then
-    echo "❌ 网卡 $IFACE 不存在！"
-    exit 1
+# 检查 root 权限
+if [[ $EUID -ne 0 ]]; then
+   echo "❌ 此脚本需要 root 权限运行"
+   echo "请使用: sudo $0"
+   exit 1
 fi
 
-read -p "请输入静态IP地址（例如 192.168.1.100）: " IPADDR
-read -p "请输入子网掩码（例如 255.255.255.0）: " NETMASK
-read -p "请输入网关地址（例如 192.168.1.1）: " GATEWAY
-read -p "请输入DNS服务器（例如 8.8.8.8）: " DNS
-
-# 掩码转前缀函数（不用 ipcalc）
-mask2cidr() {
-    local x=${1##*255.}
-    local b=0
-    IFS=. read -r i1 i2 i3 i4 <<< "$1"
-    for n in $i1 $i2 $i3 $i4; do
-        while [ $n -gt 0 ]; do
-            ((b+=n%2))
-            n=$((n/2))
+# 验证 IP 地址格式
+validate_ip() {
+    local ip=$1
+    if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        IFS='.' read -r -a octets <<< "$ip"
+        for octet in "${octets[@]}"; do
+            if ((octet > 255)); then
+                return 1
+            fi
         done
-    done
-    echo $b
+        return 0
+    fi
+    return 1
 }
+
+# 掩码转前缀函数（修复版）
+mask2cidr() {
+    local mask=$1
+    local nbits=0
+    IFS='.' read -r -a octets <<< "$mask"
+    
+    for octet in "${octets[@]}"; do
+        case $octet in
+            255) ((nbits+=8));;
+            254) ((nbits+=7));;
+            252) ((nbits+=6));;
+            248) ((nbits+=5));;
+            240) ((nbits+=4));;
+            224) ((nbits+=3));;
+            192) ((nbits+=2));;
+            128) ((nbits+=1));;
+            0);;
+            *) echo "❌ 无效的子网掩码"; exit 1;;
+        esac
+    done
+    echo $nbits
+}
+
+# 检测网卡
+echo "检测到以下网卡："
+interfaces=$(ip -o link show | awk -F': ' '{print $2}' | grep -v "lo")
+echo "$interfaces"
+echo
+
+# 输入网卡名称
+while true; do
+    read -p "请输入要配置的网卡名称: " IFACE
+    if ip link show "$IFACE" >/dev/null 2>&1; then
+        break
+    else
+        echo "❌ 网卡 $IFACE 不存在，请重新输入"
+    fi
+done
+
+# 输入并验证 IP 地址
+while true; do
+    read -p "请输入静态IP地址（例如 192.168.1.100）: " IPADDR
+    if validate_ip "$IPADDR"; then
+        break
+    else
+        echo "❌ IP 地址格式无效，请重新输入"
+    fi
+done
+
+# 输入并验证子网掩码
+while true; do
+    read -p "请输入子网掩码（例如 255.255.255.0）: " NETMASK
+    if validate_ip "$NETMASK"; then
+        break
+    else
+        echo "❌ 子网掩码格式无效，请重新输入"
+    fi
+done
+
+# 输入并验证网关
+while true; do
+    read -p "请输入网关地址（例如 192.168.1.1）: " GATEWAY
+    if validate_ip "$GATEWAY"; then
+        break
+    else
+        echo "❌ 网关地址格式无效，请重新输入"
+    fi
+done
+
+# 输入并验证 DNS
+while true; do
+    read -p "请输入DNS服务器（例如 8.8.8.8，多个用逗号分隔）: " DNS
+    IFS=',' read -r -a dns_array <<< "$DNS"
+    valid=true
+    for dns in "${dns_array[@]}"; do
+        dns=$(echo "$dns" | xargs)  # 去除空格
+        if ! validate_ip "$dns"; then
+            echo "❌ DNS 地址 $dns 格式无效"
+            valid=false
+            break
+        fi
+    done
+    if $valid; then
+        break
+    fi
+done
 
 PREFIX=$(mask2cidr "$NETMASK")
 
 echo
+echo "=========================================="
 echo "即将配置以下信息："
 echo "网卡：$IFACE"
 echo "模式：静态"
-echo "IP地址：$IPADDR"
-echo "掩码：$NETMASK (/ $PREFIX)"
+echo "IP地址：$IPADDR/$PREFIX"
+echo "掩码：$NETMASK"
 echo "网关：$GATEWAY"
 echo "DNS：$DNS"
+echo "=========================================="
 echo
+
 read -p "确认继续？(y/n): " CONFIRM
-[[ "$CONFIRM" != "y" ]] && echo "操作已取消。" && exit 0
+[[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]] && echo "操作已取消。" && exit 0
 
-# 停止 DHCP
-dhclient -r "$IFACE" >/dev/null 2>&1
+echo
+echo "⏳ 正在配置网络..."
 
-# 清除旧 IP
-ip addr flush dev "$IFACE"
+# 备份当前配置
+BACKUP_DIR="/root/network_backup_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+ip addr show "$IFACE" > "$BACKUP_DIR/ip_addr.txt" 2>/dev/null || true
+ip route show > "$BACKUP_DIR/routes.txt" 2>/dev/null || true
+cp /etc/resolv.conf "$BACKUP_DIR/resolv.conf" 2>/dev/null || true
+echo "📁 已备份当前配置到: $BACKUP_DIR"
 
-# 添加新 IP
-ip addr add "$IPADDR/$PREFIX" dev "$IFACE"
+# 停止可能的 DHCP 客户端
+dhclient -r "$IFACE" >/dev/null 2>&1 || true
+systemctl stop NetworkManager >/dev/null 2>&1 || true
+
+# 清除旧配置
+ip addr flush dev "$IFACE" 2>/dev/null || true
+
+# 配置新 IP
+if ip addr add "$IPADDR/$PREFIX" dev "$IFACE"; then
+    echo "✅ IP 地址配置成功"
+else
+    echo "❌ IP 地址配置失败"
+    exit 1
+fi
+
+# 启用网卡
 ip link set "$IFACE" up
 
-# 添加网关
-ip route add default via "$GATEWAY" dev "$IFACE" 2>/dev/null || {
+# 配置网关
+if ip route | grep -q "^default"; then
     ip route replace default via "$GATEWAY" dev "$IFACE"
-}
+else
+    ip route add default via "$GATEWAY" dev "$IFACE"
+fi
+echo "✅ 网关配置成功"
 
-# 更新 DNS
-echo -e "nameserver $DNS" | tee /etc/resolv.conf >/dev/null
+# 配置 DNS（保留原有配置，添加新的）
+cp /etc/resolv.conf /etc/resolv.conf.bak 2>/dev/null || true
+{
+    echo "# Generated by network config script at $(date)"
+    IFS=',' read -r -a dns_array <<< "$DNS"
+    for dns in "${dns_array[@]}"; do
+        dns=$(echo "$dns" | xargs)
+        echo "nameserver $dns"
+    done
+    # 保留原有的非 nameserver 行
+    grep -v "^nameserver" /etc/resolv.conf.bak 2>/dev/null || true
+} > /etc/resolv.conf
+echo "✅ DNS 配置成功"
+
+# 测试连接
+echo
+echo "🧪 测试网络连接..."
+if ping -c 2 -W 3 "$GATEWAY" >/dev/null 2>&1; then
+    echo "✅ 网关连接正常"
+else
+    echo "⚠️  无法 ping 通网关"
+fi
+
+if ping -c 2 -W 3 8.8.8.8 >/dev/null 2>&1; then
+    echo "✅ 外网连接正常"
+else
+    echo "⚠️  无法连接外网"
+fi
 
 echo
+echo "=========================================="
 echo "✅ 配置完成！当前网络状态："
+echo "=========================================="
+echo
+echo "📌 网卡信息："
 ip addr show dev "$IFACE" | grep -E "inet |link/"
 echo
-echo "🌍 当前路由表："
+echo "🌍 路由表："
 ip route show
 echo
-echo "🧭 当前 DNS："
-grep nameserver /etc/resolv.conf
+echo "🧭 DNS 配置："
+cat /etc/resolv.conf | grep nameserver
 echo
-echo "✅ 静态 IP 配置成功！"
+echo "=========================================="
+echo "⚠️  注意：当前配置为临时配置，重启后会丢失"
+echo "如需永久配置，请根据你的发行版修改网络配置文件："
+echo "  - Debian/Ubuntu: /etc/network/interfaces 或 /etc/netplan/*.yaml"
+echo "  - CentOS/RHEL: /etc/sysconfig/network-scripts/ifcfg-$IFACE"
+echo "  - Arch/Manjaro: /etc/systemd/network/*.network"
+echo "=========================================="
+echo
+echo "恢复命令（如需回滚）："
+echo "  备份目录: $BACKUP_DIR"
+echo "=========================================="
