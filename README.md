@@ -8,13 +8,6 @@
 
 无需克隆仓库，直接复制以下命令即可运行：
 
-## 🧹 一键脚本集合
-支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
-```bash
-wget -O mirrors.sh https://raw.githubusercontent.com/413hy/config/main/mirrors.sh
-chmod 777 mirrors.sh
-./mirrors.sh
-```
 
 ## 🧹 一键脚本集合
 支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
@@ -56,4 +49,20 @@ bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/clean.sh)
 快速生成系统快照
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/timeshift.sh)
+```
+
+## 🧹 换源脚本 mirrors.sh
+支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
+```bash
+wget -O mirrors.sh https://raw.githubusercontent.com/413hy/config/main/mirrors.sh
+chmod 777 mirrors.sh
+./mirrors.sh
+```
+
+## 🧹 换源最优脚本 mirrors_speed.sh
+支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
+```bash
+wget -O mirrors_speed.sh https://raw.githubusercontent.com/413hy/config/main/mirrors_speed.sh
+chmod 777 mirrors_speed.sh
+./mirrors_speed.sh
 ```
