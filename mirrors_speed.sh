@@ -271,7 +271,7 @@ for name in "${!MIRROR_LIST[@]}"; do
     SPEED_RESULTS[$name]=$speed
     PING_RESULTS[$name]=$ping
     
-    if [ -n "$speed" ] && [ -n "$ping" ] && [ "$speed" != "0" ] && [ "$speed" != "" ]; then
+    if [ "$speed" != "0" ]; then
         printf "%-15.2f %-15s\n" "$speed" "${ping}ms"
         
         # 综合评分：速度权重70%，延迟权重30%
@@ -279,15 +279,12 @@ for name in "${!MIRROR_LIST[@]}"; do
         score=$(echo "scale=2; $speed - ($ping / 10)" | bc -l 2>/dev/null)
         best_score=$(echo "scale=2; $fastest_speed - ($lowest_ping / 10)" | bc -l 2>/dev/null)
         
-        # 安全的数值比较
-        if [ -n "$score" ] && [ -n "$best_score" ]; then
-            is_better=$(echo "$score > $best_score" | bc -l 2>/dev/null)
-            if [ "$is_better" = "1" ] || [ "$fastest_speed" = "0" ]; then
-                fastest_speed=$speed
-                fastest_mirror=$url
-                fastest_name=$name
-                lowest_ping=$ping
-            fi
+        is_better=$(echo "$score > $best_score" | bc -l 2>/dev/null)
+        if [ "$is_better" -eq 1 ] || [ "$fastest_speed" = "0" ]; then
+            fastest_speed=$speed
+            fastest_mirror=$url
+            fastest_name=$name
+            lowest_ping=$ping
         fi
     else
         printf "%-15s %-15s\n" "超时" "失败"
