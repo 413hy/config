@@ -12,7 +12,7 @@
 支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
 ```bash
 wget -O mirrors.sh curl -fsSL https://raw.githubusercontent.com/413hy/config/main/mirrors.sh
-chmod 777 dcm.sh
+chmod 777 mirrors.sh
 sudo ./mirrors.sh
 ```
 
