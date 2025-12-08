@@ -220,20 +220,14 @@ test_mirror_speed() {
     # 测试延迟和下载速度
     local ping_time=$(curl -o /dev/null -s -w '%{time_total}' --connect-timeout 3 --max-time 5 "$test_file" 2>/dev/null)
     
-    if [ -n "$ping_time" ] && [ "$ping_time" != "0.000" ] && [ "$ping_time" != "" ]; then
+    if [ -n "$ping_time" ] && [ "$ping_time" != "0.000" ]; then
         # 再测试实际下载速度
         local speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 8 "$test_file" 2>/dev/null)
         
-        if [ -n "$speed" ] && [ "$speed" != "0.000" ] && [ "$speed" != "" ]; then
+        if [ -n "$speed" ] && [ "$speed" != "0.000" ]; then
             local speed_kb=$(echo "scale=2; $speed / 1024" | bc 2>/dev/null)
             local ping_ms=$(echo "scale=0; $ping_time * 1000" | bc 2>/dev/null)
-            
-            # 确保返回值不为空
-            if [ -n "$speed_kb" ] && [ -n "$ping_ms" ] && [ "$speed_kb" != "" ] && [ "$ping_ms" != "" ]; then
-                echo "$speed_kb|$ping_ms"
-            else
-                echo "0|999999"
-            fi
+            echo "$speed_kb|$ping_ms"
         else
             echo "0|999999"
         fi
@@ -321,11 +315,9 @@ echo "----------------------------------------"
 for name in "${!SPEED_RESULTS[@]}"; do
     speed="${SPEED_RESULTS[$name]}"
     ping="${PING_RESULTS[$name]}"
-    if [ -n "$speed" ] && [ -n "$ping" ] && [ "$speed" != "0" ] && [ "$speed" != "" ] && [ "$ping" != "" ]; then
+    if [ "$speed" != "0" ]; then
         score=$(echo "scale=2; $speed - ($ping / 10)" | bc -l 2>/dev/null)
-        if [ -n "$score" ] && [ "$score" != "" ]; then
-            echo "$score|$name|$speed|$ping"
-        fi
+        echo "$score|$name|$speed|$ping"
     fi
 done | sort -rn | head -5 | awk -F'|' '{printf "%d. %-25s %8.2f KB/s  %5sms\n", NR, $2, $3, $4}'
 echo ""
