@@ -62,7 +62,8 @@ chmod 777 mirrors.sh
 ## 🧹 换源最优脚本 mirrors_speed.sh
 支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
 ```bash
-wget -O mirrors_speed.sh https://raw.githubusercontent.com/413hy/config/main/mirrors_speed.sh
-chmod 777 mirrors_speed.sh
-./mirrors_speed.sh
+apt install netselect-apt -y
+netselect-apt trixie
+mv sources.list /etc/apt/sources.list
+apt update
 ```
