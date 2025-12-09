@@ -59,8 +59,10 @@ chmod 777 mirrors.sh
 ./mirrors.sh
 ```
 
-## 第三方镜像源 SuperManito / LinuxMirrors
-
+## 🧹 第三方镜像源 SuperManito / LinuxMirrors
+```bash
+bash <(curl -sSL https://linuxmirrors.cn/main.sh)
+```
 
 
 ## 🧹 换源（官方） netselect-apt
