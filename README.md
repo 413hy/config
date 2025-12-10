@@ -13,6 +13,9 @@
 支持 Debian / Ubuntu / CentOS / Arch / Fedora / openSUSE 等主流发行版
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/413hy/config/main/yhe.sh)
+
+或
+简化版：bash <(curl -fsSL yhe.085580.xyz)
 ```
 
 #### 🛠️ 配置网卡脚本
