@@ -213,19 +213,11 @@ configure_rhel_based() {
     local distro=$1
     local base_url="$MIRROR_BASE"
     local centos_release=""
-    local use_vault=0
-    local vault_release=""
 
     if [ "$distro" = "centos" ] && [ -f /etc/centos-release ]; then
         centos_release=$(cat /etc/centos-release)
         if [[ "$centos_release" == *"CentOS Linux"* ]] && [[ "${VERSION_ID%%.*}" -ge 8 ]]; then
             base_url="https://vault.centos.org"
-            use_vault=1
-            vault_release=$(echo "$centos_release" | sed -n 's/.*release \([0-9.]\+\).*/\1/p')
-            if [ -z "$vault_release" ]; then
-                vault_release="8.5.2111"
-            fi
-            echo "检测到 CentOS Linux ${vault_release}，将使用 Vault 源: $base_url"
         fi
     fi
     
@@ -238,18 +230,11 @@ configure_rhel_based() {
             for file in /etc/yum.repos.d/CentOS-*.repo; do
                 [ -f "$file" ] && backup_file "$file"
             done
+            
             sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
                 -e "s|^#baseurl=|baseurl=|g" \
                 -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
                 -i.bak /etc/yum.repos.d/CentOS-*.repo
-            sed -E -e "s|/centos/centos/|/centos/|g" -i /etc/yum.repos.d/CentOS-*.repo
-            if [ "$use_vault" -eq 1 ]; then
-                sed -E \
-                    -e "s|/\\$contentdir/\\$releasever/|/${vault_release}/|g" \
-                    -e "s|/centos/${VERSION_ID%%.*}/|/${vault_release}/|g" \
-                    -e "s|/centos/8/|/${vault_release}/|g" \
-                    -i /etc/yum.repos.d/CentOS-*.repo
-            fi
             ;;
         rocky)
             sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
@@ -286,6 +271,9 @@ run_rhel_self_check() {
     echo "开始自检（仅检查启用的 baseurl 是否可访问）..."
     for file in "${repo_files[@]}"; do
         [ -f "$file" ] || continue
+        if [ "${DEBUG:-0}" = "1" ]; then
+            echo "[DEBUG] 检查文件: $file"
+        fi
         awk -F= '
             /^\[.*\]/ {section=$0}
             /^enabled=/ {enabled=$2}
@@ -310,16 +298,63 @@ run_rhel_self_check() {
             test_url="${baseurl%/}/repodata/repomd.xml"
             if command -v curl >/dev/null 2>&1; then
                 if curl -fsI --connect-timeout 5 "$test_url" >/dev/null 2>&1; then
-                    echo "✅ $file $section -> $test_url"
+                    echo "✅ $section -> $test_url"
                 else
-                    echo "❌ $file $section -> $test_url (无法访问)"
+                    echo "❌ $section -> $test_url (无法访问)"
                 fi
             else
-                echo "⚠️ 未找到 curl，跳过 $file $section 的可用性检测"
+                echo "⚠️ 未找到 curl，跳过 $section 的可用性检测"
             fi
         done
     done
-    echo "自检完成。若存在失败项，请将输出内容发给我。"
+    echo "自检完成。若存在失败项，请将 DEBUG=1 的执行日志发给我。"
+}
+
+run_rhel_self_check() {
+    local repo_dir="/etc/yum.repos.d"
+    local repo_files=("$repo_dir"/*.repo)
+    if [ "${#repo_files[@]}" -eq 0 ]; then
+        echo "未找到 repo 配置文件，跳过自检"
+        return
+    fi
+    echo "开始自检（仅检查启用的 baseurl 是否可访问）..."
+    for file in "${repo_files[@]}"; do
+        [ -f "$file" ] || continue
+        debug "检查文件: $file"
+        awk -F= '
+            /^\[.*\]/ {section=$0}
+            /^enabled=/ {enabled=$2}
+            /^baseurl=/ {baseurl=$2}
+            /^#?mirrorlist=/ {mirrorlist=$2}
+            /^$/ {
+                if (enabled == "1" && baseurl != "") {
+                    print section "|" baseurl
+                }
+                enabled=""; baseurl=""; mirrorlist=""
+            }
+            END {
+                if (enabled == "1" && baseurl != "") {
+                    print section "|" baseurl
+                }
+            }
+        ' "$file" | while IFS='|' read -r section baseurl; do
+            baseurl=$(echo "$baseurl" | xargs)
+            if [ -z "$baseurl" ]; then
+                continue
+            fi
+            test_url="${baseurl%/}/repodata/repomd.xml"
+            if command -v curl >/dev/null 2>&1; then
+                if curl -fsI --connect-timeout 5 "$test_url" >/dev/null 2>&1; then
+                    echo "✅ $section -> $test_url"
+                else
+                    echo "❌ $section -> $test_url (无法访问)"
+                fi
+            else
+                echo "⚠️ 未找到 curl，跳过 $section 的可用性检测"
+            fi
+        done
+    done
+    echo "自检完成。若存在失败项，请将 DEBUG=1 的执行日志发给我。"
 }
 
 # Alpine Linux
