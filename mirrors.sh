@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 echo "欢迎使用Linux镜像源切换脚本，作者 yhe"
 echo "该脚本正在测试中，如若继续使用后出现的任何问题均与本作者无关（如系统损坏，数据丢失等）"
 
@@ -37,6 +38,57 @@ echo "检测到系统: $OS_ID ${VERSION_CODENAME:-$VERSION_ID}"
 # 镜像源地址（可根据需要修改）
 MIRROR_BASE="https://mirrors.ustc.edu.cn"
 
+# 下载工具检测
+fetch_url() {
+    local url=$1
+    local dest=$2
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$url" -o "$dest"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$dest" "$url"
+    else
+        echo "缺少 curl 或 wget，请先安装其中之一"
+        exit 1
+    fi
+}
+
+resolve_codename() {
+    local codename="${VERSION_CODENAME:-}"
+    if [ -z "$codename" ] && command -v lsb_release >/dev/null 2>&1; then
+        codename=$(lsb_release -sc 2>/dev/null || true)
+    fi
+    if [ -z "$codename" ] && [ -f /etc/os-release ]; then
+        . /etc/os-release
+        codename="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
+    fi
+    echo "$codename"
+}
+
+update_deb822_sources() {
+    local file=$1
+    local base_url=$2
+    local security_url=$3
+    local tmp
+    tmp=$(mktemp)
+    awk -v base="$base_url" -v sec="$security_url" '
+        BEGIN { mode="base" }
+        /^Suites:/ {
+            mode="base"
+            if ($0 ~ /security/) mode="security"
+        }
+        /^URIs:/ {
+            if (mode == "security") {
+                print "URIs: " sec
+            } else {
+                print "URIs: " base
+            }
+            next
+        }
+        { print }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
 # 备份和替换函数
 backup_file() {
     local file=$1
@@ -53,21 +105,23 @@ backup_file() {
 # Debian/Ubuntu 系列
 configure_debian_ubuntu() {
     local distro=$1
+    local codename
+    codename=$(resolve_codename)
+    if [ -z "$codename" ]; then
+        echo "无法检测系统代号（codename），请安装 lsb-release 或手动填写 VERSION_CODENAME"
+        exit 1
+    fi
     
     # 处理 DEB822 格式 (Debian 12+, Ubuntu 24.04+)
     if [ -f "/etc/apt/sources.list.d/debian.sources" ]; then
         echo "检测到 DEB822 格式配置文件"
         backup_file "/etc/apt/sources.list.d/debian.sources"
-        
-        sed -i '/^URIs:/ { /security/! s#.*#URIs: '"$MIRROR_BASE"'/debian/# }' /etc/apt/sources.list.d/debian.sources
-        sed -i '/^URIs:/ { /security/ s#.*#URIs: '"$MIRROR_BASE"'/debian-security/# }' /etc/apt/sources.list.d/debian.sources
+        update_deb822_sources "/etc/apt/sources.list.d/debian.sources" "$MIRROR_BASE/debian/" "$MIRROR_BASE/debian-security/"
         
     elif [ -f "/etc/apt/sources.list.d/ubuntu.sources" ]; then
         echo "检测到 Ubuntu DEB822 格式配置文件"
         backup_file "/etc/apt/sources.list.d/ubuntu.sources"
-        
-        sed -i '/^URIs:/ { /security/! s#.*#URIs: '"$MIRROR_BASE"'/ubuntu/# }' /etc/apt/sources.list.d/ubuntu.sources
-        sed -i '/^URIs:/ { /security/ s#.*#URIs: '"$MIRROR_BASE"'/ubuntu/# }' /etc/apt/sources.list.d/ubuntu.sources
+        update_deb822_sources "/etc/apt/sources.list.d/ubuntu.sources" "$MIRROR_BASE/ubuntu/" "$MIRROR_BASE/ubuntu/"
         
     # 处理传统格式
     else
@@ -75,24 +129,24 @@ configure_debian_ubuntu() {
         backup_file "/etc/apt/sources.list"
         
         if [ "$distro" = "debian" ]; then
-            if [ -n "$VERSION_CODENAME" ]; then
-                wget -O /etc/apt/sources.list "$MIRROR_BASE/repogen/conf/debian-https-4-$VERSION_CODENAME" 2>/dev/null || {
+            if [ -n "$codename" ]; then
+                fetch_url "$MIRROR_BASE/repogen/conf/debian-https-4-$codename" /etc/apt/sources.list 2>/dev/null || {
                     echo "自动下载失败，手动生成配置"
                     cat > /etc/apt/sources.list <<EOF
-deb $MIRROR_BASE/debian/ $VERSION_CODENAME main contrib non-free non-free-firmware
-deb $MIRROR_BASE/debian/ $VERSION_CODENAME-updates main contrib non-free non-free-firmware
-deb $MIRROR_BASE/debian/ $VERSION_CODENAME-backports main contrib non-free non-free-firmware
-deb $MIRROR_BASE/debian-security/ $VERSION_CODENAME-security main contrib non-free non-free-firmware
+deb $MIRROR_BASE/debian/ $codename main contrib non-free non-free-firmware
+deb $MIRROR_BASE/debian/ $codename-updates main contrib non-free non-free-firmware
+deb $MIRROR_BASE/debian/ $codename-backports main contrib non-free non-free-firmware
+deb $MIRROR_BASE/debian-security/ $codename-security main contrib non-free non-free-firmware
 EOF
                 }
             fi
         elif [ "$distro" = "ubuntu" ]; then
-            if [ -n "$VERSION_CODENAME" ]; then
+            if [ -n "$codename" ]; then
                 cat > /etc/apt/sources.list <<EOF
-deb $MIRROR_BASE/ubuntu/ $VERSION_CODENAME main restricted universe multiverse
-deb $MIRROR_BASE/ubuntu/ $VERSION_CODENAME-updates main restricted universe multiverse
-deb $MIRROR_BASE/ubuntu/ $VERSION_CODENAME-backports main restricted universe multiverse
-deb $MIRROR_BASE/ubuntu/ $VERSION_CODENAME-security main restricted universe multiverse
+deb $MIRROR_BASE/ubuntu/ $codename main restricted universe multiverse
+deb $MIRROR_BASE/ubuntu/ $codename-updates main restricted universe multiverse
+deb $MIRROR_BASE/ubuntu/ $codename-backports main restricted universe multiverse
+deb $MIRROR_BASE/ubuntu/ $codename-security main restricted universe multiverse
 EOF
             fi
         fi
@@ -157,6 +211,15 @@ EOF
 # CentOS / Rocky Linux / AlmaLinux
 configure_rhel_based() {
     local distro=$1
+    local base_url="$MIRROR_BASE"
+    local centos_release=""
+
+    if [ "$distro" = "centos" ] && [ -f /etc/centos-release ]; then
+        centos_release=$(cat /etc/centos-release)
+        if [[ "$centos_release" == *"CentOS Linux"* ]] && [[ "${VERSION_ID%%.*}" -ge 8 ]]; then
+            base_url="https://vault.centos.org"
+        fi
+    fi
     
     if [ ! -d /etc/yum.repos.d ]; then
         mkdir -p /etc/yum.repos.d
@@ -168,24 +231,21 @@ configure_rhel_based() {
                 [ -f "$file" ] && backup_file "$file"
             done
             
-            if [ "${VERSION_ID%%.*}" -ge 8 ]; then
-                sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                    -e "s|^#baseurl=http://mirror.centos.org|baseurl=$MIRROR_BASE/centos|g" \
-                    -i.bak /etc/yum.repos.d/CentOS-*.repo
-            else
-                sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                    -e "s|^#baseurl=http://mirror.centos.org/centos|baseurl=$MIRROR_BASE/centos|g" \
-                    -i.bak /etc/yum.repos.d/CentOS-*.repo
-            fi
+            sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
+                -e "s|^#baseurl=|baseurl=|g" \
+                -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
+                -i.bak /etc/yum.repos.d/CentOS-*.repo
             ;;
         rocky)
-            sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                -e "s|^#baseurl=https://dl.rockylinux.org/\$contentdir|baseurl=$MIRROR_BASE/rocky|g" \
+            sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
+                -e "s|^#baseurl=|baseurl=|g" \
+                -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
                 -i.bak /etc/yum.repos.d/rocky*.repo
             ;;
         almalinux)
-            sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                -e "s|^#baseurl=https://repo.almalinux.org|baseurl=$MIRROR_BASE/almalinux|g" \
+            sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
+                -e "s|^#baseurl=|baseurl=|g" \
+                -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
                 -i.bak /etc/yum.repos.d/almalinux*.repo
             ;;
     esac
