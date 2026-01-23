@@ -52,12 +52,6 @@ fetch_url() {
     fi
 }
 
-debug() {
-    if [ "${DEBUG:-0}" = "1" ]; then
-        echo "[DEBUG] $*"
-    fi
-}
-
 resolve_codename() {
     local codename="${VERSION_CODENAME:-}"
     if [ -z "$codename" ] && command -v lsb_release >/dev/null 2>&1; then
@@ -236,12 +230,11 @@ configure_rhel_based() {
             for file in /etc/yum.repos.d/CentOS-*.repo; do
                 [ -f "$file" ] && backup_file "$file"
             done
-            debug "CentOS base URL: $base_url"
+            
             sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
                 -e "s|^#baseurl=|baseurl=|g" \
                 -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
                 -i.bak /etc/yum.repos.d/CentOS-*.repo
-            sed -E -e "s|/centos/centos/|/centos/|g" -i /etc/yum.repos.d/CentOS-*.repo
             ;;
         rocky)
             sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
