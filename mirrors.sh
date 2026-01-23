@@ -211,6 +211,15 @@ EOF
 # CentOS / Rocky Linux / AlmaLinux
 configure_rhel_based() {
     local distro=$1
+    local base_url="$MIRROR_BASE"
+    local centos_release=""
+
+    if [ "$distro" = "centos" ] && [ -f /etc/centos-release ]; then
+        centos_release=$(cat /etc/centos-release)
+        if [[ "$centos_release" == *"CentOS Linux"* ]] && [[ "${VERSION_ID%%.*}" -ge 8 ]]; then
+            base_url="https://vault.centos.org"
+        fi
+    fi
     
     if [ ! -d /etc/yum.repos.d ]; then
         mkdir -p /etc/yum.repos.d
@@ -222,24 +231,21 @@ configure_rhel_based() {
                 [ -f "$file" ] && backup_file "$file"
             done
             
-            if [ "${VERSION_ID%%.*}" -ge 8 ]; then
-                sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                    -e "s|^#baseurl=http://mirror.centos.org|baseurl=$MIRROR_BASE/centos|g" \
-                    -i.bak /etc/yum.repos.d/CentOS-*.repo
-            else
-                sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                    -e "s|^#baseurl=http://mirror.centos.org/centos|baseurl=$MIRROR_BASE/centos|g" \
-                    -i.bak /etc/yum.repos.d/CentOS-*.repo
-            fi
+            sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
+                -e "s|^#baseurl=|baseurl=|g" \
+                -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
+                -i.bak /etc/yum.repos.d/CentOS-*.repo
             ;;
         rocky)
-            sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                -e "s|^#baseurl=https://dl.rockylinux.org/\$contentdir|baseurl=$MIRROR_BASE/rocky|g" \
+            sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
+                -e "s|^#baseurl=|baseurl=|g" \
+                -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
                 -i.bak /etc/yum.repos.d/rocky*.repo
             ;;
         almalinux)
-            sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-                -e "s|^#baseurl=https://repo.almalinux.org|baseurl=$MIRROR_BASE/almalinux|g" \
+            sed -E -e "s|^mirrorlist=|#mirrorlist=|g" \
+                -e "s|^#baseurl=|baseurl=|g" \
+                -e "s|^baseurl=.*://[^/]+|baseurl=${base_url}|g" \
                 -i.bak /etc/yum.repos.d/almalinux*.repo
             ;;
     esac
