@@ -130,7 +130,8 @@ show_menu() {
  4) 清理系统数据（安全版）
  5) 查看系统信息
  6) 管理系统快照
- 7) 强制更新脚本
+ 7) 切换系统镜像源
+ 8) 强制更新脚本
  0) 退出
 ============================================
 EOF
@@ -161,7 +162,7 @@ main() {
 
   while true; do
     show_menu
-    read -rp "请输入选项 [0-7]: " choice
+    read -rp "请输入选项 [0-8]: " choice
     case "$choice" in
       1) run_remote_script "netconfig.sh" ;;
       2) run_remote_script "check.sh" ;;
@@ -169,7 +170,8 @@ main() {
       4) run_remote_script "clean.sh" ;;
       5) run_remote_script "system.sh" ;;
       6) run_remote_script "timeshift.sh" ;;
-      7)
+      7) run_remote_script "mirrors.sh" ;;
+      8)
         blue "正在强制更新..."
         install_self
         green "更新完成，请重新运行 yhe"
