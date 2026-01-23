@@ -250,7 +250,64 @@ configure_rhel_based() {
             ;;
     esac
     
-    echo "配置完成！请运行: sudo yum makecache 或 sudo dnf makecache"
+    if [ "${SKIP_REFRESH:-0}" != "1" ]; then
+        if command -v dnf >/dev/null 2>&1; then
+            dnf makecache -y || true
+        else
+            yum makecache -y || true
+        fi
+    else
+        echo "已跳过缓存更新（可手动运行: sudo yum makecache 或 sudo dnf makecache）"
+    fi
+}
+
+run_rhel_self_check() {
+    local repo_dir="/etc/yum.repos.d"
+    local repo_files=("$repo_dir"/*.repo)
+    if [ "${#repo_files[@]}" -eq 0 ]; then
+        echo "未找到 repo 配置文件，跳过自检"
+        return
+    fi
+    echo "开始自检（仅检查启用的 baseurl 是否可访问）..."
+    for file in "${repo_files[@]}"; do
+        [ -f "$file" ] || continue
+        if [ "${DEBUG:-0}" = "1" ]; then
+            echo "[DEBUG] 检查文件: $file"
+        fi
+        awk -F= '
+            /^\[.*\]/ {section=$0}
+            /^enabled=/ {enabled=$2}
+            /^baseurl=/ {baseurl=$2}
+            /^#?mirrorlist=/ {mirrorlist=$2}
+            /^$/ {
+                if (enabled == "1" && baseurl != "") {
+                    print section "|" baseurl
+                }
+                enabled=""; baseurl=""; mirrorlist=""
+            }
+            END {
+                if (enabled == "1" && baseurl != "") {
+                    print section "|" baseurl
+                }
+            }
+        ' "$file" | while IFS='|' read -r section baseurl; do
+            baseurl=$(echo "$baseurl" | xargs)
+            if [ -z "$baseurl" ]; then
+                continue
+            fi
+            test_url="${baseurl%/}/repodata/repomd.xml"
+            if command -v curl >/dev/null 2>&1; then
+                if curl -fsI --connect-timeout 5 "$test_url" >/dev/null 2>&1; then
+                    echo "✅ $section -> $test_url"
+                else
+                    echo "❌ $section -> $test_url (无法访问)"
+                fi
+            else
+                echo "⚠️ 未找到 curl，跳过 $section 的可用性检测"
+            fi
+        done
+    done
+    echo "自检完成。若存在失败项，请将 DEBUG=1 的执行日志发给我。"
 }
 
 run_rhel_self_check() {
