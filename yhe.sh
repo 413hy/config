@@ -131,7 +131,7 @@ show_menu() {
  5) 查看系统信息
  6) 管理系统快照
  7) 切换系统镜像源
- 8) 强制更新脚本
+ 8) 清理软件源配置
  0) 退出
 ============================================
 EOF
@@ -171,12 +171,7 @@ main() {
       5) run_remote_script "system.sh" ;;
       6) run_remote_script "timeshift.sh" ;;
       7) run_remote_script "mirrors.sh" ;;
-      8)
-        blue "正在强制更新..."
-        install_self
-        green "更新完成，请重新运行 yhe"
-        exit 0
-        ;;
+      8) run_remote_script "repo_cleanup.sh" ;;
       0)
         green "再见！"
         exit 0
