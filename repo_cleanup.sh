@@ -1,73 +1,37 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
-echo "=========================================="
-echo "🧹 软件源配置清理脚本（高风险）"
-echo "=========================================="
-echo
+# 1) 备份 /etc/apt（防止删错还能恢复）
+ts="$(date +%F_%H%M%S)"
+mkdir -p "/root/apt-backup-$ts"
+cp -a /etc/apt "/root/apt-backup-$ts/"
+echo "✅ 已备份到 /root/apt-backup-$ts"
 
-if [[ $EUID -ne 0 ]]; then
-  echo "❌ 此脚本需要 root 权限运行"
-  echo "请使用: sudo $0"
-  exit 1
-fi
+# 2) 删除所有软件源配置（list / sources）
+rm -f /etc/apt/sources.list
+find /etc/apt/sources.list.d -maxdepth 1 -type f -print -delete 2>/dev/null || true
 
-read -rp "确认要清理所有软件源配置与相关密钥？(y/N): " confirm
-if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-  echo "已取消"
-  exit 0
-fi
+# 3) 删除 APT 信任密钥（仅 /etc/apt 里的，不动系统包自带的 /usr/share/keyrings）
+rm -f /etc/apt/trusted.gpg
+find /etc/apt/trusted.gpg.d -maxdepth 1 -type f -print -delete 2>/dev/null || true
+find /etc/apt/keyrings -maxdepth 1 -type f -print -delete 2>/dev/null || true
 
-BACKUP_DIR="/root/yhe_repo_cleanup_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$BACKUP_DIR"
+# 4) 删除 pin / preferences（有些人加过会导致版本/源混乱）
+rm -f /etc/apt/preferences
+rm -rf /etc/apt/preferences.d/* 2>/dev/null || true
 
-backup_and_remove() {
-  local path=$1
-  if [[ -e "$path" ]]; then
-    mkdir -p "$BACKUP_DIR$(dirname "$path")"
-    mv "$path" "$BACKUP_DIR$path"
-    echo "已移除: $path"
-  fi
-}
+# 5) 清空 apt 缓存索引
+apt-get clean
+rm -rf /var/lib/apt/lists/*
 
-backup_and_remove_glob() {
-  local glob=$1
-  shopt -s nullglob
-  local files=($glob)
-  shopt -u nullglob
-  if [[ ${#files[@]} -gt 0 ]]; then
-    for f in "${files[@]}"; do
-      backup_and_remove "$f"
-    done
-  fi
-}
+# 6) 写入“干净的 Debian 官方源”（自动识别系统代号）
+CODENAME="$(. /etc/os-release; echo "${VERSION_CODENAME:-bookworm}")"
+cat > /etc/apt/sources.list <<EOF
+deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://mirrors.huaweicloud.com/debian ${CODENAME} main contrib non-free non-free-firmware
+deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://mirrors.huaweicloud.com/debian ${CODENAME}-updates main contrib non-free non-free-firmware
+deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://mirrors.huaweicloud.com/debian-security ${CODENAME}-security main contrib non-free non-free-firmware
+EOF
 
-# Debian/Ubuntu (APT)
-backup_and_remove "/etc/apt/sources.list"
-backup_and_remove_glob "/etc/apt/sources.list.d/*"
-backup_and_remove "/etc/apt/trusted.gpg"
-backup_and_remove_glob "/etc/apt/trusted.gpg.d/*"
-backup_and_remove_glob "/etc/apt/keyrings/*"
-backup_and_remove_glob "/usr/share/keyrings/*"
-
-# RHEL/CentOS/Fedora (YUM/DNF)
-backup_and_remove_glob "/etc/yum.repos.d/*.repo"
-backup_and_remove_glob "/etc/pki/rpm-gpg/*"
-
-# SUSE (zypper)
-backup_and_remove_glob "/etc/zypp/repos.d/*"
-backup_and_remove_glob "/etc/zypp/keys/*"
-
-# Arch (pacman)
-backup_and_remove "/etc/pacman.d/mirrorlist"
-backup_and_remove "/etc/pacman.d/gnupg"
-
-# Alpine (apk)
-backup_and_remove "/etc/apk/repositories"
-
-# NixOS (nix)
-backup_and_remove "/etc/nixos/configuration.nix"
-
-echo
-echo "✅ 清理完成，备份目录: $BACKUP_DIR"
-echo "请根据需要手动重新配置软件源与密钥。"
+# 7) 更新
+apt-get update
+echo "✅ 清理完成 + 已恢复为纯 Debian 官方源（${CODENAME}）"
